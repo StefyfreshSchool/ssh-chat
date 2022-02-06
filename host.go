@@ -672,12 +672,12 @@ func (h *Host) InitCommands(c *chat.Commands) {
 				body := fmt.Sprintf("Assigned symbol %q by %s.", s, msg.From().Name())
 				room.Send(message.NewSystemMsg(body, member.User))
 				symbolSet = true
-			}
-			
-			if id, ok := member.Identifier.(*Identity); ok {
-				id.SetSymbol("")
-			} else {
-				return errors.New("user does not support setting symbol")
+			} else {			
+				if id, ok := member.Identifier.(*Identity); ok {
+					id.SetSymbol("")
+				} else {
+					return errors.New("user does not support setting symbol")
+				}
 			}
 
 			oldID := member.ID()

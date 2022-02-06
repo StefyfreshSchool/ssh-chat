@@ -673,6 +673,12 @@ func (h *Host) InitCommands(c *chat.Commands) {
 				room.Send(message.NewSystemMsg(body, member.User))
 				symbolSet = true
 			}
+			
+			if id, ok := member.Identifier.(*Identity); ok {
+				id.SetSymbol("")
+			} else {
+				return errors.New("user does not support setting symbol")
+			}
 
 			oldID := member.ID()
 			newID := sanitize.Name(args[1])

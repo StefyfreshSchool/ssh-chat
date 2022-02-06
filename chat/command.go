@@ -5,7 +5,9 @@ package chat
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -205,8 +207,8 @@ func InitCommands(c *Commands) {
 
 	c.Add(Command{
 		Prefix:     "/theme",
-		PrefixHelp: "[colors|...]",
-		Help:       "Set your color theme.",
+		PrefixHelp: "[colours|...]",
+		Help:       "Set your colour theme.",
 		Handler: func(room *Room, msg message.CommandMsg) error {
 			user := msg.From()
 			args := msg.Args()
@@ -241,6 +243,32 @@ func InitCommands(c *Commands) {
 				}
 			}
 			return errors.New("theme not found")
+		},
+	})
+
+	c.Add(Command{
+		Prefix: "/recolour",
+		Help:   "Change your user colour.",
+		Handler: func(room *Room, msg message.CommandMsg) error {
+			args := msg.Args()
+			colourInt := rand.Int()
+
+			if len(args) > 0 {
+				colour, err := strconv.Atoi(args[0])
+				if err != nil || colour < 0 {
+					return errors.New("colour int is invalid")
+				}
+				colourInt = colour
+			}
+
+			u := msg.From()
+			u.SetColorIdx(colourInt)
+			if u.OnChange != nil {
+				u.OnChange()
+			}
+
+			room.Send(message.NewSystemMsg("You got a new colour.", u))
+			return nil
 		},
 	})
 

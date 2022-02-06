@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,9 +37,11 @@ func GetPrompt(user *message.User) string {
 // TODO: Should be easy to add support for multiple rooms, if we want.
 type Host struct {
 	*chat.Room
-	listener *sshd.SSHListener
-	commands chat.Commands
-	auth     *Auth
+	listener           *sshd.SSHListener
+	commands           chat.Commands
+	auth               *Auth
+	ratelimitMsgs      int
+	ratelimitTimeframe time.Duration
 
 	// Version string to print on /version
 	Version string
@@ -60,10 +63,12 @@ type Host struct {
 func NewHost(listener *sshd.SSHListener, auth *Auth) *Host {
 	room := chat.NewRoom()
 	h := Host{
-		Room:     room,
-		listener: listener,
-		commands: chat.Commands{},
-		auth:     auth,
+		Room:               room,
+		listener:           listener,
+		commands:           chat.Commands{},
+		auth:               auth,
+		ratelimitMsgs:      3,
+		ratelimitTimeframe: time.Second * 3,
 	}
 
 	// Make our own commands registry instance.
@@ -201,6 +206,8 @@ func (h *Host) Connect(term *sshd.Terminal) {
 			break
 		}
 
+		ratelimit.Amount = h.ratelimitMsgs
+		ratelimit.Frequency = h.ratelimitTimeframe
 		err = ratelimit.Count(1)
 		if err != nil {
 			user.Send(message.NewSystemMsg("Message rejected: Rate limiting is in effect.", user))
@@ -402,6 +409,7 @@ func (h *Host) InitCommands(c *chat.Commands) {
 			return sendPM(room, strings.Join(args, " "), msg.From(), target)
 		},
 	})
+	c.Alias("/reply", "/r")
 
 	c.Add(chat.Command{
 		Prefix:     "/whois",
@@ -672,12 +680,6 @@ func (h *Host) InitCommands(c *chat.Commands) {
 				body := fmt.Sprintf("Assigned symbol %q by %s.", s, msg.From().Name())
 				room.Send(message.NewSystemMsg(body, member.User))
 				symbolSet = true
-			} else {			
-				if id, ok := member.Identifier.(*Identity); ok {
-					id.SetSymbol("")
-				} else {
-					return errors.New("user does not support setting symbol")
-				}
 			}
 
 			oldID := member.ID()
@@ -701,6 +703,84 @@ func (h *Host) InitCommands(c *chat.Commands) {
 			body := fmt.Sprintf("%s was renamed by %s.", oldID, msg.From().Name())
 			room.Send(message.NewAnnounceMsg(body))
 
+			return nil
+		},
+	})
+
+	c.Add(chat.Command{
+		Op:         true,
+		Prefix:     "/symbol",
+		PrefixHelp: "USER SYMBOL",
+		Help:       "Add SYMBOL prefix to USER",
+		Handler: func(room *chat.Room, msg message.CommandMsg) error {
+			if !room.IsOp(msg.From()) {
+				return errors.New("must be op")
+			}
+
+			args := msg.Args()
+			if len(args) < 1 {
+				return errors.New("must specify user")
+			}
+
+			member, ok := room.MemberByID(args[0])
+			if !ok {
+				return errors.New("user not found")
+			}
+
+			s := ""
+			if len(args) > 1 {
+				s = args[1]
+			}
+
+			if id, ok := member.Identifier.(*Identity); ok {
+				id.SetSymbol(s)
+			} else {
+				return errors.New("user does not support setting symbol")
+			}
+
+			if member.User.OnChange != nil {
+				member.User.OnChange()
+			}
+
+			body := fmt.Sprintf("Assigned symbol %q by %s.", s, msg.From().Name())
+			if s == "" {
+				body = fmt.Sprintf("%s reset your symbol.", msg.From().Name())
+			}
+			room.Send(message.NewSystemMsg(body, member.User))
+
+			return nil
+		},
+	})
+
+	c.Add(chat.Command{
+		Op:         true,
+		Prefix:     "/ratelimit",
+		PrefixHelp: "LIMIT TIMEFRAME",
+		Help:       "Change the rate limit for messages per second.",
+		Handler: func(room *chat.Room, msg message.CommandMsg) error {
+			if !room.IsOp(msg.From()) {
+				return errors.New("must be op")
+			}
+
+			args := msg.Args()
+			if len(args) < 2 {
+				return errors.New("must specify limit and timeframe")
+			}
+
+			msgs, err := strconv.Atoi(args[0])
+			if err != nil || msgs < 1 {
+				return errors.New("limit is invalid")
+			}
+
+			timeframe, err := strconv.Atoi(args[1])
+			if err != nil || timeframe < 0 {
+				return errors.New("timeframe is invalid")
+			}
+			h.ratelimitMsgs = msgs
+			h.ratelimitTimeframe = time.Second * time.Duration(timeframe)
+
+			body := fmt.Sprintf("Rate limit updated to %d messages per %d seconds by %s.", msgs, timeframe, msg.From().Name())
+			room.Send(message.NewAnnounceMsg(body))
 			return nil
 		},
 	})

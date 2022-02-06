@@ -35,6 +35,7 @@ type Options struct {
 	Motd       string   `long:"motd" description:"Optional Message of the Day file."`
 	Pprof      int      `long:"pprof" description:"Enable pprof http server for profiling."`
 	Verbose    []bool   `short:"v" long:"verbose" description:"Show verbose logging."`
+	Debug      bool     `short:"d" long:"debug" description:"Show debug logging."`
 	Version    bool     `long:"version" description:"Print version and exit."`
 	Allowlist  string   `long:"allowlist" description:"Optional file of public keys who are allowed to connect."`
 	Whitelist  string   `long:"whitelist" dexcription:"Old name for allowlist option"`
@@ -93,6 +94,9 @@ func main() {
 	}
 
 	logLevel := logLevels[numVerbose]
+	if options.Debug {
+		logLevel = log.Debug
+	}
 	logger := golog.New(os.Stderr, logLevel)
 	sshchat.SetLogger(logger)
 

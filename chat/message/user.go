@@ -51,7 +51,7 @@ func NewUser(identity Identifier) *User {
 		Ignored:    set.New(),
 		Focused:    set.New(),
 	}
-	u.setColorIdx(rand.Int())
+	u.SetColorIdx(rand.Int())
 
 	return &u
 }
@@ -112,7 +112,7 @@ func (u *User) SetConfig(cfg UserConfig) {
 // Rename the user with a new Identifier.
 func (u *User) SetID(id string) {
 	u.Identifier.SetID(id)
-	u.setColorIdx(rand.Int())
+	u.SetColorIdx(rand.Int())
 
 	if u.OnChange != nil {
 		u.OnChange()
@@ -133,9 +133,9 @@ func (u *User) SetReplyTo(user *User) {
 	u.replyTo = user
 }
 
-// setColorIdx will set the colorIdx to a specific value, primarily used for
+// SetColorIdx will set the colorIdx to a specific value, primarily used for
 // testing.
-func (u *User) setColorIdx(idx int) {
+func (u *User) SetColorIdx(idx int) {
 	u.colorIdx = idx
 }
 
